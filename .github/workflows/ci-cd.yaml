@@ -16,10 +16,10 @@ jobs:
           fetch-depth: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarcloud-github-action@master
+        uses: SonarSource/sonarqube-scan-action@v5.0.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: https://sonarcloud.io
         with:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
@@ -82,7 +82,6 @@ jobs:
         run: |
           TAG=${{ needs.build-and-push.outputs.image_tag }}
           ENV=${{ github.ref_name == 'main' && 'prod' || 'dev' }}
-
           sed -i "s|pixelopscloud/attendease-backend:.*|pixelopscloud/attendease-backend:$TAG|g" infra/$ENV/backend/deployment.yaml
           sed -i "s|pixelopscloud/attendease-frontend:.*|pixelopscloud/attendease-frontend:$TAG|g" infra/$ENV/frontend/deployment.yaml
 
