@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AttendEase</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>🎯 AttendEase</h1>
+    <p class="subtitle">Mark your attendance</p>
+
+    <div class="card">
+      <input type="text" id="nameInput" placeholder="Enter your name..." />
+      <button onclick="markAttendance()">Mark Attendance</button>
+    </div>
+
+    <div class="message" id="message"></div>
+
+    <div class="records">
+      <h2>Today's Attendance</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Name</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="attendanceList"></tbody>
+      </table>
+    </div>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>
