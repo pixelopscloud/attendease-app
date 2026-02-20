@@ -16,14 +16,15 @@ jobs:
           fetch-depth: 0
 
       - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.0.0
+        run: |
+          sonar-scanner \
+            -Dsonar.organization=${{ secrets.SONAR_ORG }} \
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }} \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.token=${{ secrets.SONAR_TOKEN }}
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: https://sonarcloud.io
-        with:
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORG }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
 
   build-and-push:
     name: Build & Push Images
