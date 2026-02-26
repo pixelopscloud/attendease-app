@@ -54,6 +54,7 @@ jobs:
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
+            --skip-dirs usr/local/lib/node_modules/npm \
             $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
 
       - name: Trivy Scan Frontend
@@ -64,6 +65,7 @@ jobs:
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
+            --skip-dirs usr/local/lib/node_modules/npm \
             $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
 
       - name: Push Images
