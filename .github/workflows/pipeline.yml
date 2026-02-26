@@ -10,7 +10,6 @@ env:
 
 jobs:
 
-  # ── JOB 1: SonarCloud SAST ──
   sonarcloud:
     name: SonarCloud Scan
     runs-on: self-hosted
@@ -24,13 +23,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        with:
-          args: >
-            -Dsonar.organization=${{ secrets.SONAR_ORG }}
-            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.sources=backend/src,frontend
 
-  # ── JOB 2: Build + Trivy + Push ──
   build-scan-push:
     name: Build, Trivy Scan & Push
     runs-on: self-hosted
@@ -78,7 +71,6 @@ jobs:
           docker push $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
           docker push $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
 
-  # ── JOB 3: Update Dev Manifests ──
   deploy-dev:
     name: Deploy to Dev
     runs-on: self-hosted
@@ -105,7 +97,6 @@ jobs:
           git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}"
           git push
 
-  # ── JOB 4: OWASP ZAP DAST ──
   owasp-zap:
     name: OWASP ZAP Scan
     runs-on: self-hosted
@@ -130,7 +121,6 @@ jobs:
           name: zap-report
           path: zap-report.html
 
-  # ── JOB 5: Promote to Prod ──
   deploy-prod:
     name: Deploy to Production
     runs-on: self-hosted
