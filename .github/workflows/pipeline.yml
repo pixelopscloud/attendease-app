@@ -28,7 +28,7 @@ jobs:
           args: >
             -Dsonar.organization=${{ secrets.SONAR_ORG }}
             -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
-            -Dsonar.sources=attendease-app/backend/src,attendease-app/frontend
+            -Dsonar.sources=backend/src,frontend
 
   # ── JOB 2: Build + Trivy + Push ──
   build-scan-push:
@@ -48,10 +48,10 @@ jobs:
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
 
       - name: Build Backend
-        run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./attendease-app/backend
+        run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./backend
 
       - name: Build Frontend
-        run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./attendease-app/frontend
+        run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./frontend
 
       - name: Trivy Scan Backend
         run: |
