@@ -1,0 +1,158 @@
+name: DevSecOps Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  BACKEND_IMAGE: pixelopscloud/attendease-backend
+  FRONTEND_IMAGE: pixelopscloud/attendease-frontend
+
+jobs:
+
+  # ── JOB 1: SonarCloud SAST ──
+  sonarcloud:
+    name: SonarCloud Scan
+    runs-on: self-hosted
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=${{ secrets.SONAR_ORG }}
+            -Dsonar.projectKey=${{ secrets.SONAR_PROJECT_KEY }}
+            -Dsonar.sources=attendease-app/backend/src,attendease-app/frontend
+
+  # ── JOB 2: Build + Trivy + Push ──
+  build-scan-push:
+    name: Build, Trivy Scan & Push
+    runs-on: self-hosted
+    needs: sonarcloud
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set Image Tag
+        id: tag
+        run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+
+      - name: Docker Login
+        run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
+
+      - name: Build Backend
+        run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./attendease-app/backend
+
+      - name: Build Frontend
+        run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./attendease-app/frontend
+
+      - name: Trivy Scan Backend
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
+
+      - name: Trivy Scan Frontend
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --exit-code 1 \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
+
+      - name: Push Images
+        run: |
+          docker push $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
+          docker push $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
+
+  # ── JOB 3: Update Dev Manifests ──
+  deploy-dev:
+    name: Deploy to Dev
+    runs-on: self-hosted
+    needs: build-scan-push
+    steps:
+      - name: Checkout Infra Repo
+        uses: actions/checkout@v4
+        with:
+          repository: pixelopscloud/attendease-infra
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra
+
+      - name: Update Dev Image Tags
+        run: |
+          sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/backend/deployment.yaml
+          sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/frontend/deployment.yaml
+
+      - name: Commit and Push
+        run: |
+          cd infra
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}"
+          git push
+
+  # ── JOB 4: OWASP ZAP DAST ──
+  owasp-zap:
+    name: OWASP ZAP Scan
+    runs-on: self-hosted
+    needs: deploy-dev
+    steps:
+      - name: Wait for ArgoCD Sync
+        run: sleep 60
+
+      - name: ZAP Scan
+        run: |
+          docker run --rm \
+            -v $(pwd):/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://$(kubectl get svc frontend -n attendease-dev -o jsonpath='{.spec.clusterIP}') \
+            -r zap-report.html \
+            -I
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.html
+
+  # ── JOB 5: Promote to Prod ──
+  deploy-prod:
+    name: Deploy to Production
+    runs-on: self-hosted
+    needs: owasp-zap
+    steps:
+      - name: Checkout Infra Repo
+        uses: actions/checkout@v4
+        with:
+          repository: pixelopscloud/attendease-infra
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra
+
+      - name: Update Prod Image Tags
+        run: |
+          sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/backend/deployment.yaml
+          sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/frontend/deployment.yaml
+
+      - name: Commit and Push
+        run: |
+          cd infra
+          git config user.email "github-actions@github.com"
+          git config user.name "GitHub Actions"
+          git add .
+          git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}"
+          git push
