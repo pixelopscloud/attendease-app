@@ -39,25 +39,24 @@ jobs:
         run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./backend
       - name: Build Frontend
         run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./frontend
-      
       - name: Trivy Scan Backend
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
+            --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
-            
       - name: Trivy Scan Frontend
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
+            --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
-            
       - name: Push Images
         run: |
           docker push $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
@@ -93,32 +92,26 @@ jobs:
     needs: deploy-dev
     steps:
       - name: Wait for ArgoCD Sync
-        run: sleep 100 
-
-      - name: Verify Application Access
-        run: |
-          echo "Checking if Frontend is accessible on NodePort 30081..."
-          for i in {1..10}; do curl -sSf http://localhost:30081 && break || (echo "Retry $i..." && sleep 10); done
-
+        run: sleep 60
       - name: ZAP Scan
         run: |
           mkdir -p /tmp/zap-work
-          chmod -R 777 /tmp/zap-work
-          docker run --rm --user root \
+          chmod 777 /tmp/zap-work
+          # NodePort 30081 use kar rahe hain host network par
+          docker run --rm \
+            --user root \
             --network host \
             -v /tmp/zap-work:/zap/wrk:rw \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://localhost:30081 \
             -r zap-report.html \
-            -I || true 
-          cp /tmp/zap-work/zap-report.html .
-
+            -I || true
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
           name: zap-report
-          path: zap-report.html
+          path: /tmp/zap-work/zap-report.html
 
   deploy-prod:
     name: Deploy to Production
