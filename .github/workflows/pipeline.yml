@@ -66,8 +66,9 @@ jobs:
           path: infra
       - name: Update Dev Image Tags
         run: |
-          sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/backend/deployment.yaml
-          sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/frontend/deployment.yaml
+          NEW_TAG=${{ needs.build-scan-push.outputs.image_tag }}
+          sed -i "s|backend:.*|backend:$NEW_TAG|g" infra/dev/backend/deployment.yaml
+          sed -i "s|frontend:.*|frontend:$NEW_TAG|g" infra/dev/frontend/deployment.yaml
       - name: Commit and Push
         run: |
           cd infra
@@ -108,19 +109,24 @@ jobs:
           repository: pixelopscloud/attendease-infra
           token: ${{ secrets.INFRA_REPO_TOKEN }}
           path: infra
+
       - name: Update Prod Image Tags
         run: |
-          sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/backend/deployment.yaml
-          sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/frontend/deployment.yaml
+          NEW_TAG=${{ needs.build-scan-push.outputs.image_tag }}
+          # Yeh command v1.0.0 ko dhoond kar naye tag se badal degi
+          sed -i "s|backend:.*|backend:$NEW_TAG|g" infra/prod/backend/deployment.yaml
+          sed -i "s|frontend:.*|frontend:$NEW_TAG|g" infra/prod/frontend/deployment.yaml
+
       - name: Commit and Push
         run: |
           cd infra
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
+          # Sirf tab commit karega agar change milega
           if [ -n "$(git status --porcelain)" ]; then
             git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}"
             git push
           else
-            echo "No changes, skipping."
+            echo "No changes detected in prod files."
           fi
