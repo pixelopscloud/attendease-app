@@ -109,8 +109,10 @@ jobs:
 
       - name: ZAP Scan
         run: |
+          mkdir -p /tmp/zap-work
+          chmod 777 /tmp/zap-work
           docker run --rm \
-            -v $(pwd):/zap/wrk \
+            -v /tmp/zap-work:/zap/wrk \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://$(kubectl get svc frontend -n attendease-dev -o jsonpath='{.spec.clusterIP}') \
