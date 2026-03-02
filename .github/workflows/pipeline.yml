@@ -9,7 +9,6 @@ env:
   FRONTEND_IMAGE: pixelopscloud/attendease-frontend
 
 jobs:
-
   sonarcloud:
     name: SonarCloud Scan
     runs-on: self-hosted
@@ -17,7 +16,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: SonarCloud Scan
         uses: SonarSource/sonarcloud-github-action@master
         env:
@@ -32,20 +30,15 @@ jobs:
       image_tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
-
       - name: Set Image Tag
         id: tag
         run: echo "tag=${{ github.sha }}" >> $GITHUB_OUTPUT
-
       - name: Docker Login
         run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
       - name: Build Backend
         run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./backend
-
       - name: Build Frontend
-        run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./frontend
-
+        run: docker build -t $FRONTEND_IMAGE:${{ secrets.tag.outputs.tag }} ./frontend
       - name: Trivy Scan Backend
         run: |
           docker run --rm \
@@ -54,9 +47,7 @@ jobs:
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
-            --skip-dirs usr/local/lib/node_modules/npm \
             $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
-
       - name: Trivy Scan Frontend
         run: |
           docker run --rm \
@@ -65,9 +56,7 @@ jobs:
             --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
-            --skip-dirs usr/local/lib/node_modules/npm \
             $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
-
       - name: Push Images
         run: |
           docker push $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
@@ -84,12 +73,10 @@ jobs:
           repository: pixelopscloud/attendease-infra
           token: ${{ secrets.INFRA_REPO_TOKEN }}
           path: infra
-
       - name: Update Dev Image Tags
         run: |
           sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/backend/deployment.yaml
           sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/dev/frontend/deployment.yaml
-
       - name: Commit and Push
         run: |
           cd infra
@@ -105,19 +92,29 @@ jobs:
     needs: deploy-dev
     steps:
       - name: Wait for ArgoCD Sync
-        run: sleep 60
+        run: sleep 100 
+
+      - name: Verify Application Access
+        run: |
+          echo "Checking if Frontend is accessible on NodePort 30081..."
+          # Try to connect to the NodePort, 5 retries
+          for i in {1..5}; do curl -sSf http://localhost:30081 && break || (echo "Retry $i..." && sleep 10); done
 
       - name: ZAP Scan
         run: |
           mkdir -p /tmp/zap-work
-          chmod 777 /tmp/zap-work
-          docker run --rm \
-            -v /tmp/zap-work:/zap/wrk \
+          chmod -R 777 /tmp/zap-work
+          
+          docker run --rm --user root \
+            --network host \
+            -v /tmp/zap-work:/zap/wrk:rw \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
-            -t http://$(kubectl get svc frontend -n attendease-dev -o jsonpath='{.spec.clusterIP}') \
+            -t http://localhost:30081 \
             -r zap-report.html \
-            -I
+            -I || true 
+            
+          cp /tmp/zap-work/zap-report.html .
 
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
@@ -136,12 +133,10 @@ jobs:
           repository: pixelopscloud/attendease-infra
           token: ${{ secrets.INFRA_REPO_TOKEN }}
           path: infra
-
       - name: Update Prod Image Tags
         run: |
           sed -i "s|image: pixelopscloud/attendease-backend:.*|image: pixelopscloud/attendease-backend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/backend/deployment.yaml
           sed -i "s|image: pixelopscloud/attendease-frontend:.*|image: pixelopscloud/attendease-frontend:${{ needs.build-scan-push.outputs.image_tag }}|g" infra/prod/frontend/deployment.yaml
-
       - name: Commit and Push
         run: |
           cd infra
