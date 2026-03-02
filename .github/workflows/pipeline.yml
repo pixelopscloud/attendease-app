@@ -84,7 +84,7 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
-          git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}"
+          git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}" || echo "No changes to commit"
           git push
 
   owasp-zap:
@@ -134,5 +134,5 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
-          git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}"
+          git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}" || echo "No changes to commit"
           git push
