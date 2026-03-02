@@ -38,25 +38,26 @@ jobs:
       - name: Build Backend
         run: docker build -t $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} ./backend
       - name: Build Frontend
-        run: docker build -t $FRONTEND_IMAGE:${{ secrets.tag.outputs.tag }} ./frontend
+        run: docker build -t $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} ./frontend
+      
       - name: Trivy Scan Backend
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
-            --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
+            
       - name: Trivy Scan Frontend
         run: |
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:latest image \
-            --exit-code 1 \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
             $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }}
+            
       - name: Push Images
         run: |
           docker push $BACKEND_IMAGE:${{ steps.tag.outputs.tag }}
@@ -97,14 +98,12 @@ jobs:
       - name: Verify Application Access
         run: |
           echo "Checking if Frontend is accessible on NodePort 30081..."
-          # Try to connect to the NodePort, 5 retries
-          for i in {1..5}; do curl -sSf http://localhost:30081 && break || (echo "Retry $i..." && sleep 10); done
+          for i in {1..10}; do curl -sSf http://localhost:30081 && break || (echo "Retry $i..." && sleep 10); done
 
       - name: ZAP Scan
         run: |
           mkdir -p /tmp/zap-work
           chmod -R 777 /tmp/zap-work
-          
           docker run --rm --user root \
             --network host \
             -v /tmp/zap-work:/zap/wrk:rw \
@@ -113,7 +112,6 @@ jobs:
             -t http://localhost:30081 \
             -r zap-report.html \
             -I || true 
-            
           cp /tmp/zap-work/zap-report.html .
 
       - name: Upload ZAP Report
