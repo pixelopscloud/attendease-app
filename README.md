@@ -1,2 +1,2 @@
 # AttendEase
-# test
+# tests
