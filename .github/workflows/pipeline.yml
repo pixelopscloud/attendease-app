@@ -42,21 +42,11 @@ jobs:
       
       - name: Trivy Scan Backend
         run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} || true
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --ignore-unfixed $BACKEND_IMAGE:${{ steps.tag.outputs.tag }} || true
 
       - name: Trivy Scan Frontend
         run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} || true
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity CRITICAL,HIGH --ignore-unfixed $FRONTEND_IMAGE:${{ steps.tag.outputs.tag }} || true
             
       - name: Push Images
         run: |
@@ -84,8 +74,10 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
-          git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}" || echo "No changes to commit"
-          git push
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "ci: update dev image tag to ${{ needs.build-scan-push.outputs.image_tag }}"
+            git push
+          fi
 
   owasp-zap:
     name: OWASP ZAP Scan
@@ -98,15 +90,7 @@ jobs:
         run: |
           mkdir -p /tmp/zap-work
           chmod 777 /tmp/zap-work
-          docker run --rm \
-            --user root \
-            --network host \
-            -v /tmp/zap-work:/zap/wrk:rw \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py \
-            -t http://localhost:30081 \
-            -r zap-report.html \
-            -I || true
+          docker run --rm --user root --network host -v /tmp/zap-work:/zap/wrk:rw ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t http://localhost:30081 -r zap-report.html -I || true
       - name: Upload ZAP Report
         uses: actions/upload-artifact@v4
         with:
@@ -134,5 +118,9 @@ jobs:
           git config user.email "github-actions@github.com"
           git config user.name "GitHub Actions"
           git add .
-          git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}" || echo "No changes to commit"
-          git push
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "ci: promote to prod - tag ${{ needs.build-scan-push.outputs.image_tag }}"
+            git push
+          else
+            echo "No changes, skipping."
+          fi
